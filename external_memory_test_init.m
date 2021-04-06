@@ -12,10 +12,24 @@ Matrix_Multiplication_On = true;
 
 %% parameter initialization
 % Vector_Matrix_Length = Matrix_Size^2 + Matrix_Size;
+
+% Quantization
+quantization = 8;
+bandwidth = 32;
+
+parallin = bandwidth/quantization;
+parallout = bandwidth/quantization;
+
+zero_fx8 = fi(0, 1, 8, 7);
+
+Phase_In = ceil (inChannel / parallin);
+Phase_Out = ceil (outChannel / parallout);
+
+mod_in = mod(inChannel , parallin);
 byPass = 0;
 
 inChannel = 4;
-outChannel = 2;
+outChannel = 1;
 
 Conv_Stride = 1;
 Conv_Padding = 0;
@@ -28,17 +42,17 @@ Tr = 1;
 Tc = 1;
 
 Feature_Area = Feature_Width * Feature_Height;
-Feature_Length = inChannel * Feature_Area;
+Feature_Length = Phase_In * Feature_Area;
 
 Weight_Area = Weight_Width * Weight_Height;
-Weight_Length = inChannel * Weight_Area * outChannel;
+Weight_Length = Phase_In * Weight_Area * Phase_Out;
 
 Feature_Weight_Length = Feature_Length + Weight_Length;
 
 outFeature_Width = Feature_Width - Weight_Width + 1;
 outFeature_Height = Feature_Height - Weight_Height + 1;
 outFeature_Area = outFeature_Width * outFeature_Height;
-outFeature_Length = outFeature_Width * outFeature_Height * outChannel;
+outFeature_Length = outFeature_Width * outFeature_Height * Phase_Out;
 
 % Burst_Length = Vector_Matrix_Length;
 Burst_Length = Feature_Weight_Length;
@@ -60,29 +74,18 @@ Bias = 0;
     param_b = fi([Weight_Height, Feature_Height, outChannel, outFeature_Height, Conv_Padding, Pool_Width, To, Tc],1,16,0);
     % Param [31:0]
     param_fx32 = bitconcat(param_a, param_b);
-
-% Quantization
-quantization = 8;
-bandwidth = 32;
-parallin = 32/8; 
-
-zero_fx8 = fi(0, 1, 8, 7);
-% input Channel
-    iter_in = ceil (inChannel / parallin); 
-    mod_in = mod(inChannel , parallin);
     
-
 % WeightData : fix (1,8,7)
-    weight = rand(Weight_Width, Weight_Height, inChannel, outChannel) -0.3;
-    weight_fx8 = fi (weight, 1, 8, 6);
-    weight_fx32 = fi(zeros(Weight_Width, Weight_Height, iter_in, outChannel),0,32,0);
+    weight = randi([0 100], Weight_Width, Weight_Height, inChannel, outChannel) - 30;
+    weight_fx8 = fi (weight, 1, 8, 0);
+    weight_fx32 = fi(zeros(Weight_Width, Weight_Height, Phase_In, outChannel),0,32,0);
 
-% concatenate the 8 bit data to 32 bit 
-    for i = 1:iter_in
-        if(i == iter_in)
-    %         for j = 1: parallin
-    %                 weight_fx32(:,:,i,:) = bitconcat(weight_fx8)
-    %         end
+    % concatenate the 8 bit data to 32 bit 
+    for i = 1:Phase_In
+        if(i == Phase_In)
+        %         for j = 1: parallin
+        %                 weight_fx32(:,:,i,:) = bitconcat(weight_fx8)
+        %         end
         end
 
         weight_fx32(:,:,i,:) = bitconcat(weight_fx8(:,:,1 + (i-1)* parallin,:), ...
@@ -90,16 +93,21 @@ zero_fx8 = fi(0, 1, 8, 7);
                                          weight_fx8(:,:,3 + (i-1)* parallin,:), ...
                                          weight_fx8(:,:,4 + (i-1)* parallin,:));
     end
-% FeatureData
-    feature = rand(Feature_Width, Feature_Height, inChannel) -0.3;
-    feautre_fx8 = fi(feature, 1, 8, 6);
-    feature_fx32 = fi(zeros(Feature_Width, Feature_Height, iter_in),0,32,0);
 
-    for i = 1:iter_in
-        if(i == iter_in)
-    %         for j = 1: parallin
-    %                 weight_fx32(:,:,i,:) = bitconcat(weight_fx8)
-    %         end
+    % reshpe the weight matrix to 1-D format in DDR Storege
+    weight_fx32_ddr = reshape(weight_fx32.permute([2 1 3 4]), 1, []);
+    
+% FeatureData
+    feature = randi([1 100], Feature_Width, Feature_Height, inChannel) - 30;
+    feautre_fx8 = fi(feature, 1, 8, 0);
+    feature_fx32 = fi(zeros(Feature_Width, Feature_Height, Phase_In),0,32,0);
+
+    % concatenate the 8 bit data to 32 bit 
+    for i = 1:Phase_In
+        if(i == Phase_In)
+        %         for j = 1: parallin
+        %                 weight_fx32(:,:,i,:) = bitconcat(weight_fx8)
+        %         end
         end
 
         feature_fx32(:,:,i) = bitconcat(feautre_fx8(:,:,1 + (i-1)* parallin), ...
@@ -108,14 +116,29 @@ zero_fx8 = fi(0, 1, 8, 7);
                                          feautre_fx8(:,:,4 + (i-1)* parallin));
     end
 
+    % reshpe the weight matrix to 1-D format in DDR Storege
+    feature_fx32_ddr = reshape(feature_fx32.permute([2 1 3]), 1, []);
+
 
 %% read DDR Data type
 maskDataType = get_param('external_memory_test/DDR','OutDataTypeStr');
 
 %% DDR initialization data
+ddrInit_fx32 = horzcat(weight_fx32_ddr, feature_fx32_ddr);
+size_ddrInit = size(ddrInit_fx32, 2);
+
+zeros_ddr = fi(zeros(1,DDR_Depth - size_ddrInit),0,32,0);
+
+
+
+
 if strcmp(maskDataType(1:4),'uint') || strcmp(maskDataType(1:3),'int')
-%     ddrInitData =fi((randi([1 100],1,DDR_Depth) -30), numerictype(maskDataType));
-ddrInitData =fi((randi([1 100],1,DDR_Depth) -30), 1, 32);
+% ddrInitData =fi((randi([1 100],1,DDR_Depth) -30), numerictype(maskDataType));
+% ddrInitData =fi((randi([1 100],1,DDR_Depth) -30), 0, 32);
+    
+
+    ddrInitData= horzcat(ddrInit_fx32, zeros_ddr);
+
 %     ddrInitData =fi((rand(1,DDR_Depth) - 0.3), 1, 32);
 elseif strcmp(maskDataType, 'single')
     ddrInitData = single((rand(1,DDR_Depth)));
