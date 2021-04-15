@@ -20,16 +20,21 @@ bandwidth = 32;
 parallin = bandwidth/quantization;
 parallout = bandwidth/quantization;
 
-zero_fx8 = fi(0, 1, 8, 7);
+ZERO = fi(0, 1, quantization, 0);
+ONE  = fi(1, 1, quantization, 0);
+
+inChannel = 4;
+outChannel = 1;
 
 Phase_In = ceil (inChannel / parallin);
 Phase_Out = ceil (outChannel / parallout);
 
 mod_in = mod(inChannel , parallin);
-byPass = 0;
+byPass = 1;
 
-inChannel = 4;
-outChannel = 1;
+byPass_pool = 1;
+byPass_ReLU = 1;
+byPass_Function = 0;
 
 Conv_Stride = 1;
 Conv_Padding = 0;
