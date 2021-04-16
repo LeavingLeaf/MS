@@ -1,4 +1,3 @@
-
 %
 
 %   Copyright 2017 The MathWorks, Inc.
@@ -14,7 +13,9 @@ Matrix_Multiplication_On = true;
 % Vector_Matrix_Length = Matrix_Size^2 + Matrix_Size;
 
 % Quantization
-quantization = 8;
+Delay_Count = 300;
+
+quantization = 32;
 bandwidth = 32;
 
 parallin = bandwidth/quantization;
@@ -23,8 +24,8 @@ parallout = bandwidth/quantization;
 ZERO = fi(0, 1, quantization, 0);
 ONE  = fi(1, 1, quantization, 0);
 
-inChannel = 4;
-outChannel = 1;
+inChannel = 2;
+outChannel = 2;
 
 Phase_In = ceil (inChannel / parallin);
 Phase_Out = ceil (outChannel / parallout);
@@ -82,56 +83,70 @@ Bias = 0;
     
 % WeightData : fix (1,8,7)
     weight = randi([0 100], Weight_Width, Weight_Height, inChannel, outChannel) - 30;
-    weight_fx8 = fi (weight, 1, 8, 0);
-    weight_fx32 = fi(zeros(Weight_Width, Weight_Height, Phase_In, outChannel),0,32,0);
 
-    % concatenate the 8 bit data to 32 bit 
-    for i = 1:Phase_In
-        if(i == Phase_In)
-        %         for j = 1: parallin
-        %                 weight_fx32(:,:,i,:) = bitconcat(weight_fx8)
-        %         end
-        end
-
-        weight_fx32(:,:,i,:) = bitconcat(weight_fx8(:,:,1 + (i-1)* parallin,:), ...
-                                         weight_fx8(:,:,2 + (i-1)* parallin,:), ...
-                                         weight_fx8(:,:,3 + (i-1)* parallin,:), ...
-                                         weight_fx8(:,:,4 + (i-1)* parallin,:));
-    end
-
-    % reshpe the weight matrix to 1-D format in DDR Storege
+    %----------------------------single-channel----------------------------
+    weight_fx32 = fi (weight, 1, 32, 0);
     weight_fx32_ddr = reshape(weight_fx32.permute([2 1 3 4]), 1, []);
+    
+%     %----------------------------multi-channel----------------------------
+%     weight_fx8 = fi (weight, 1, 8, 0);
+%     weight_fx32_4_fx8 = fi(zeros(Weight_Width, Weight_Height, Phase_In, outChannel),0,32,0);
+% 
+%     % concatenate the 8 bit data to 32 bit 
+%     for i = 1:Phase_In
+%         if(i == Phase_In)
+%         %         for j = 1: parallin
+%         %                 weight_fx32_4_fx8(:,:,i,:) = bitconcat(weight_fx8)
+%         %         end
+%         end
+% 
+%         weight_fx32_4_fx8(:,:,i,:) = bitconcat(weight_fx8(:,:,1 + (i-1)* parallin,:), ...
+%                                          weight_fx8(:,:,2 + (i-1)* parallin,:), ...
+%                                          weight_fx8(:,:,3 + (i-1)* parallin,:), ...
+%                                          weight_fx8(:,:,4 + (i-1)* parallin,:));
+%     end
+% 
+%     % reshpe the weight matrix to 1-D format in DDR Storege
+%     weight_fx32_4_fx8_ddr = reshape(weight_fx32_4_fx8.permute([2 1 3 4]), 1, []);
     
 % FeatureData
     feature = randi([1 100], Feature_Width, Feature_Height, inChannel) - 30;
-    feautre_fx8 = fi(feature, 1, 8, 0);
-    feature_fx32 = fi(zeros(Feature_Width, Feature_Height, Phase_In),0,32,0);
 
-    % concatenate the 8 bit data to 32 bit 
-    for i = 1:Phase_In
-        if(i == Phase_In)
-        %         for j = 1: parallin
-        %                 weight_fx32(:,:,i,:) = bitconcat(weight_fx8)
-        %         end
-        end
-
-        feature_fx32(:,:,i) = bitconcat(feautre_fx8(:,:,1 + (i-1)* parallin), ...
-                                         feautre_fx8(:,:,2 + (i-1)* parallin), ...
-                                         feautre_fx8(:,:,3 + (i-1)* parallin), ...
-                                         feautre_fx8(:,:,4 + (i-1)* parallin));
-    end
-
-    % reshpe the weight matrix to 1-D format in DDR Storege
+    
+    %----------------------------single-channel----------------------------    
+    feature_fx32 = fi(feature, 1, 32, 0);
     feature_fx32_ddr = reshape(feature_fx32.permute([2 1 3]), 1, []);
+    
+%     %----------------------------multi-channel----------------------------
+%     feautre_fx8 = fi(feature, 1, 8, 0);
+%     feature_fx32_4_fx8 = fi(zeros(Feature_Width, Feature_Height, Phase_In),0,32,0);
+% 
+%     % concatenate the 8 bit data to 32 bit 
+%     for i = 1:Phase_In
+%         if(i == Phase_In)
+%         %         for j = 1: parallin
+%         %                 weight_fx32_4_fx8(:,:,i,:) = bitconcat(weight_fx8)
+%         %         end
+%         end
+% 
+%         feature_fx32_4_fx8(:,:,i) = bitconcat(feautre_fx8(:,:,1 + (i-1)* parallin), ...
+%                                          feautre_fx8(:,:,2 + (i-1)* parallin), ...
+%                                          feautre_fx8(:,:,3 + (i-1)* parallin), ...
+%                                          feautre_fx8(:,:,4 + (i-1)* parallin));
+%     end
+% 
+%     % reshpe the weight matrix to 1-D format in DDR Storege
+%     feature_fx32_4_fx8_ddr = reshape(feature_fx32_4_fx8.permute([2 1 3]), 1, []);
 
 
 %% read DDR Data type
 maskDataType = get_param('external_memory_test/DDR','OutDataTypeStr');
 
 %% DDR initialization data
+% ddrInit_fx32 = horzcat(weight_fx32_4_fx8_ddr, feature_fx32_4_fx8_ddr);
 ddrInit_fx32 = horzcat(weight_fx32_ddr, feature_fx32_ddr);
-size_ddrInit = size(ddrInit_fx32, 2);
 
+size_ddrInit = size(ddrInit_fx32, 2);
 zeros_ddr = fi(zeros(1,DDR_Depth - size_ddrInit),0,32,0);
 
 
@@ -150,6 +165,3 @@ elseif strcmp(maskDataType, 'single')
 else
     error('Data type %s is not supported for this example. Please try single or int32, or update hdlcoder_external_memory_init.m to provide correct DDR initialization data for this data type.', maskDataType);
 end
-
-
-% LocalWords:  DDR
