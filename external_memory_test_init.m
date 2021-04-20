@@ -11,9 +11,14 @@ Matrix_Multiplication_On = true;
 
 %% parameter initialization
 % Vector_Matrix_Length = Matrix_Size^2 + Matrix_Size;
+Delay_Count = 100;
+Delay_Count2 = 100;
+
+Exp_mu = 0;
+Exp_gamma = 1;
 
 % Quantization
-Delay_Count = 300;
+
 
 quantization = 32;
 bandwidth = 32;
@@ -24,7 +29,7 @@ parallout = bandwidth/quantization;
 ZERO = fi(0, 1, quantization, 0);
 ONE  = fi(1, 1, quantization, 0);
 
-inChannel = 2;
+inChannel = 3;
 outChannel = 2;
 
 Phase_In = ceil (inChannel / parallin);
