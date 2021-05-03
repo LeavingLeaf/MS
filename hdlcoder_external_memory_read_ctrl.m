@@ -1,5 +1,5 @@
 function [valid_out, count_out, ddr_read_done, rd_addr, rd_len, rd_avalid] = ...
-    hdlcoder_external_memory_read_ctrl(burst_len, start, rd_aready, rd_dvalid)
+    hdlcoder_external_memory_read_ctrl(burst_len, start, start_add, rd_aready, rd_dvalid)
 %
 
 %   Copyright 2017 The MathWorks, Inc.
@@ -60,7 +60,7 @@ switch (rstate)
         
     case READ_BURST_REQUEST
         % output to AXI4 Master
-        rd_addr   = uint32(0);
+        rd_addr   = uint32(start_add);
         rd_len    = uint32(burst_stop);
         rd_avalid = true;
         
@@ -73,7 +73,7 @@ switch (rstate)
         
     case DATA_COUNT
         % output to AXI4 Master
-        rd_addr   = uint32(0);
+        rd_addr   = uint32(start_add);
         rd_len    = uint32(burst_stop);
         rd_avalid = false;
         

@@ -1,4 +1,4 @@
-%
+ %
 
 %   Copyright 2017 The MathWorks, Inc.
 
@@ -11,7 +11,7 @@ Matrix_Multiplication_On = true;
 
 %% parameter initialization
 % Vector_Matrix_Length = Matrix_Size^2 + Matrix_Size;
-Delay_Count = 100;
+Delay_Count = 500;
 Delay_Count2 = 100;
 
 Exp_mu = 0;
@@ -20,6 +20,7 @@ Exp_gamma = 1;
 % Quantization
 
 
+%% Conv Layer 1
 quantization = 32;
 bandwidth = 32;
 
@@ -29,8 +30,8 @@ parallout = bandwidth/quantization;
 ZERO = fi(0, 1, quantization, 0);
 ONE  = fi(1, 1, quantization, 0);
 
-inChannel = 3;
-outChannel = 2;
+inChannel = 2;
+outChannel = 1;
 
 Phase_In = ceil (inChannel / parallin);
 Phase_Out = ceil (outChannel / parallout);
@@ -65,9 +66,24 @@ outFeature_Height = Feature_Height - Weight_Height + 1;
 outFeature_Area = outFeature_Width * outFeature_Height;
 outFeature_Length = outFeature_Width * outFeature_Height * Phase_Out;
 
+%% FC Layer 2
+inChannel_FC = outChannel;
+outChannel_FC = 3;
+
+featureFC_Width  = outFeature_Width;
+featureFC_Height = outFeature_Height;
+featureFC_Area   = outFeature_Width;
+featureFC_Length = outFeature_Length;
+
+weightFC_Width   = featureFC_Width;
+weightFC_Height  = featureFC_Height;
+weightFC_Area    = featureFC_Height;
+
+weightFC_Length = weightFC_Area * inChannel_FC * outChannel_FC;
+
 % Burst_Length = Vector_Matrix_Length;
 Burst_Length = Feature_Weight_Length;
-DDR_Depth = Weight_Length + Feature_Length + outFeature_Length;
+DDR_Depth = Weight_Length + Feature_Length + weightFC_Length;
 Duty_Cycle = 0.5;
 Single_Tolerance = 10e-5;
 
@@ -143,16 +159,33 @@ Bias = 0;
 %     % reshpe the weight matrix to 1-D format in DDR Storege
 %     feature_fx32_4_fx8_ddr = reshape(feature_fx32_4_fx8.permute([2 1 3]), 1, []);
 
+%--------------------------------------------------------------%
+%   Layer 2 FC layer
+%--------------------------------------------------------------%
+
+% parameter 
+
+% feature
+
+% weight
+    weight_FC = randi([1 100], weightFC_Width, weightFC_Height, inChannel_FC, outChannel_FC) - 30;
+    
+    %----------------------------single-channel----------------------------
+    weight_FC_fx32 = fi(weight_FC, 1, 32, 0);
+    weight_FC_fx32_ddr = reshape(weight_FC_fx32.permute([2 1 3 4]), 1, []);
+    
+    
+    
 
 %% read DDR Data type
 maskDataType = get_param('external_memory_test/DDR','OutDataTypeStr');
 
 %% DDR initialization data
 % ddrInit_fx32 = horzcat(weight_fx32_4_fx8_ddr, feature_fx32_4_fx8_ddr);
-ddrInit_fx32 = horzcat(weight_fx32_ddr, feature_fx32_ddr);
+ddrInit_fx32 = horzcat(weight_fx32_ddr, feature_fx32_ddr, weight_FC_fx32_ddr);
 
-size_ddrInit = size(ddrInit_fx32, 2);
-zeros_ddr = fi(zeros(1,DDR_Depth - size_ddrInit),0,32,0);
+% size_ddrInit = size(ddrInit_fx32, 2);
+% zeros_ddr = fi(zeros(1,DDR_Depth - size_ddrInit),0,32,0);
 
 
 
@@ -162,7 +195,7 @@ if strcmp(maskDataType(1:4),'uint') || strcmp(maskDataType(1:3),'int')
 % ddrInitData =fi((randi([1 100],1,DDR_Depth) -30), 0, 32);
     
 
-    ddrInitData= horzcat(ddrInit_fx32, zeros_ddr);
+    ddrInitData= horzcat(ddrInit_fx32);
 
 %     ddrInitData =fi((rand(1,DDR_Depth) - 0.3), 1, 32);
 elseif strcmp(maskDataType, 'single')

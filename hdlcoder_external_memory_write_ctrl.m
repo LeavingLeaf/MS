@@ -1,5 +1,5 @@
 function [ram_addr, ddr_write_done, wr_addr, wr_len, wr_valid] = ...
-    hdlcoder_external_memory_write_ctrl(burst_len, start, wr_ready, wr_complete)
+    hdlcoder_external_memory_write_ctrl(burst_len, start, start_add, wr_ready, wr_complete)
 %
 
 %   Copyright 2017 The MathWorks, Inc.
@@ -43,7 +43,7 @@ switch (wstate)
         
     case WRITE_BURST_START
         % output to AXI4 Master
-        wr_addr  = uint32(0);
+        wr_addr  = uint32(start_add);
         wr_len   = uint32(burst_stop);
         wr_valid = false;
         
@@ -60,7 +60,7 @@ switch (wstate)
         
     case DATA_COUNT
         % output to AXI4 Master
-        wr_addr  = uint32(0);
+        wr_addr  = uint32(start_add);
         wr_len   = uint32(burst_stop);
         wr_valid = true;
         
